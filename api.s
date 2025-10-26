@@ -5,6 +5,9 @@
     .arm             @ Estamos compilando para modo ARM (32 bits)
     .text            @ Indica que é código
 
+
+@TESTE OK A API É O OUTRO ARQUIVO
+
 /* -------------------------------------------
  * void funcao_enviar_1(volatile int* pio_ptr)
  * Envia o valor 1 (0b0001)
