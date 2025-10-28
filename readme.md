@@ -65,7 +65,7 @@ O design utiliza diretamente a memória embarcada na FPGA para armazenamento tem
 - Referência oficial:
 [**Manual da Placa**](https://www.terasic.com.tw/cgi-bin/page/archive.pl?Language=English&No=836&PartNo=4)
 
-### 🔧 Recurso
+### 🔧 Recursos
 
 #### 🔌 VGA module
 Módulo responsável pela comunicação entre o monitor e a memória (no caso, On Chip memory),utilizado para exibir as imagens processadas ou não através do conector VGA.
@@ -78,19 +78,61 @@ Controlar uma tela VGA requer a manipulação de dois pinos de sincronização d
 - Referência oficial:
 [**Verilog VGA module**](https://vanhunteradams.com/DE1/VGA_Driver/Driver.html)
 
+#### Plataform Designer
+Ferramenta de integração de sistemas do software Intel® Quartus® Prime,que captura projetos de hardware em nível de sistema com alto nível de abstração e automatiza a tarefa de definir e integrar componentes personalizados da Linguagem de Descrição de Hardware (HDL).Ele empacota e integra seus componentes personalizados com componentes IP da Intel e de terceiros e cria automaticamente a lógica de interconexão eliminando assim a tarefa demorada e propensa a erros de escrever HDL para especificar conexões em nível de sistema.
+
+- Referência oficial:
+[**Plataform Designer**](https://www.intel.com/content/www/us/en/docs/programmable/683738/current/platform-designer.html)
+
+## 📝 Descrição de alto nível
+
+Esta seção descreve a arquitetura de software e hardware utilizada para permitir que o processador HPS (Hard Processor System), rodando um sistema operacional Linux, controle periféricos customizados (PIOs - Parallel Input/Output) implementados na lógica da FPGA. A interação é feita através de uma API (Application Programming Interface) de baixo nível escrita em Assembly ARMv7-a.
+
+###  🌉 Ponte HPS-FPGA (Interface Hardware-Software)
+
+A comunicação fundamental entre o HPS e a FPGA ocorre através de **pontes (bridges) AXI**. Neste projeto, utilizamos a **Lightweight HPS-to-FPGA (LWH2F) Bridge**.
+
+  * **Mapeamento em Memória:** Esta ponte funciona como uma interface **mapeada em memória**. Isso significa que, do ponto de vista do HPS, os registradores dos periféricos na FPGA (como os PIOs `pio_led` e `pio_sw`) aparecem como se fossem posições de memória comuns.
+  * **Endereço Base:** O Qsys/Platform Designer atribui um **endereço físico base** para esta ponte. No nosso caso, é `0xFF200000`. Todos os periféricos conectados a esta ponte terão seus registradores acessíveis em **offsets** (deslocamentos) relativos a este endereço base.
+
+### 📁 O Arquivo de Cabeçalho `.h` (Definição do Hardware para o Software)
+
+Para que o software (seja C ou Assembly) saiba *onde* encontrar os registradores de cada periférico, o Qsys/Platform Designer gera automaticamente um arquivo de cabeçalho (geralmente `hps_0.h` ou similar).
+
+  * **Mapa de Endereços:** Este arquivo `.h` contém diretivas `#define` que mapeiam os nomes dos componentes do Qsys para seus **offsets** relativos ao endereço base da ponte.
+  * **Exemplo:** O arquivo `hps_0.h` do nosso projeto define:
+    ```c
+    #define PIO_LED_BASE 0x0
+    ```
+    Isso informa ao software que os registradores do `pio_led` começam no offset `0` a partir do endereço base da ponte (`0xFF200000`). **É crucial que os offsets usados no software correspondam exatamente aos definidos neste arquivo.** (Nota: Precisamos confirmar o offset do `pio_sw` neste arquivo ou no Qsys).
+
+### 📚 A Biblioteca Assembly 
+
+A API em Assembly (`.s`) atua como um driver de baixo nível, encapsulando o acesso direto ao hardware.
+
+  * **Mapeamento de Memória via Syscalls:** A função `iniciarCoprocessor` é responsável por tornar o endereço físico da ponte (`0xFF200000`) acessível ao programa. Ela faz isso **diretamente**, usando **chamadas de sistema (syscalls)** do Linux:
+      * **`open` (syscall \#5):** Abre o arquivo `/dev/mem`, que representa a memória física do sistema.
+      * **`mmap2` (syscall \#192):** Pede ao Kernel para mapear o endereço físico da ponte (`FPGA_BRIDGE`) em um **endereço virtual** que o programa pode usar. Esse ponteiro virtual é armazenado na variável global `FPGA_ADDRS`.
+  * **Funções Primitivas (`write_pio`, `read_pio`):** Estas funções recebem um **offset** (como `PIO_LED_OFFSET` ou `PIO_SW_OFFSET`, definidos com `.equ` baseados no `.h`) e, opcionalmente, um valor. Elas calculam o endereço virtual final (`FPGA_ADDRS + offset`) e usam as instruções ARM `STR` (Store Register) ou `LDR` (Load Register) para escrever ou ler diretamente no endereço mapeado, controlando assim os PIOs.
+  * **Encapsulamento:** Funções de mais alto nível (como `acender_led_especifico`, `ler_switch_especifico`, ou as `funcao_enviar_X` do exemplo C) podem ser construídas sobre essas primitivas, tornando o controle do hardware mais abstrato para quem chama a API. A função `encerrarCoprocessor` usa as syscalls `munmap` e `close` para liberar os recursos.
+
+## ✴️ Main 
+
+O programa C (`.c`) contém a lógica principal da aplicação e utiliza a API Assembly para interagir com o hardware.
+
+  * **Declarações `extern`:** O C utiliza declarações `extern` (ex: `extern void* iniciarCoprocessor(void);`, `extern void write_pio(unsigned int offset, unsigned int value);` - adaptando a assinatura se necessário) para informar ao compilador que essas funções existem, mesmo que sua implementação esteja em outro arquivo (o `.s`).
+  * **Chamada de Funções:** O código C chama as funções Assembly como se fossem funções C normais (ex: `lw_virtual = iniciarCoprocessor();`, `funcao_apagar_tudo(led_ptr);`). O compilador C gera o código de máquina apropriado para passar os parâmetros (nos registradores corretos, conforme a convenção de chamada ARM EABI) e pular para o endereço da função Assembly.
+  * **Lógica de Controle:** O C decide *quando* e *com quais valores* chamar as funções da API Assembly, implementando a lógica desejada (ler botões, acender LEDs, processar dados, etc.). No exemplo `pograma.c`, ele lê a entrada do usuário e chama a função Assembly correspondente.
+
+### 🏗️ Montagem e Linkagem
+
+O processo para criar o programa final que roda no HPS envolve três etapas principais:
+
+1.  **Montagem (Assembly `.s` -\> `.o`):** O **Montador** (Assembler - `as`) lê o arquivo da API Assembly (`.s`) e o traduz para código de máquina binário específico da arquitetura ARMv7-a. O resultado é um **arquivo objeto** (`.o`). Este arquivo contém o código de máquina das funções Assembly e uma tabela de símbolos indicando quais funções são globais (`.global`).
+2.  **Compilação (C `.c` -\> `.o`):** O **Compilador C** (`gcc -c`) lê o arquivo C (`.c`) e o traduz para código de máquina ARMv7-a, criando outro **arquivo objeto** (`.o`). Este arquivo contém o código de máquina da função `main` e outras funções C, além de referências (na tabela de símbolos) às funções Assembly declaradas como `extern`.
+3.  **Linkagem (`.o` + `.o` -\> Executável):** O **Linker** (geralmente invocado pelo `gcc` quando não se usa `-c`) pega todos os arquivos objeto (`.o`). Sua principal tarefa é **resolver as referências**: ele encontra a chamada para `iniciarCoprocessor` no `.o` do C e a conecta à definição de `iniciarCoprocessor` no `.o` do Assembly. Ele combina todo o código de máquina, organiza as seções de dados e código, e produz um **arquivo executável** final que o Linux pode carregar e rodar.
 
 
-##
-
-
-## 🚀 Desenvolvimento e Descrição em Alto Nível
-
-
-
-
-### Ponte de comunicação *HPS* -> *FPGA*
-
-### Bibliotecas em *assembly*
 
 
 ## 📈 Análise dos Resultados
