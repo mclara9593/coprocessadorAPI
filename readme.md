@@ -80,12 +80,17 @@ Controlar uma tela VGA requer a manipulação de dois pinos de sincronização d
 
 
 
-## pido e eficiente, o que o torna útil para sistemas com restrições de tempo de processamento.
+##
+
+
+## 🚀 Desenvolvimento e Descrição em Alto Nível
 
 
 
-### 🚀 Desenvolvimento e Descrição em Alto Nível
 
+### Ponte de comunicação *HPS* -> *FPGA*
+
+### Bibliotecas em *assembly*
 
 
 ## 📈 Análise dos Resultados
