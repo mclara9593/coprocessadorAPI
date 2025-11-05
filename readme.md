@@ -15,16 +15,15 @@
 ## Introdução
 O desenvolvimento de um módulo embarcado para redimensionamento de imagens é crucial para sistemas de vigilância e exibição em tempo real, demandando soluções que unam a eficiência do hardware reconfigurável à flexibilidade do software de controle.Neste contexto, o projeto visa concluir um sistema capaz de aplicar zoom (ampliação) ou *downscale* (redução) de imagens, simulando interpolação visual, com foco nas etapas de interface e aplicação.
 
-O presente projeto insere-se no âmbito do desenvolvimento de uma **API (Application Programming Interface)** e de um **driver de software** para o coprocessador gráfico executando na FPGA da plataforma DE1-SoC.A API, que constitui a **segunda etapa**, deve ser implementada em **linguagem Assembly** e deve traduzir um repertório de instruções (ISA) para o coprocessador, utilizando comandos que replicam as operações previamente implementadas via chaves e botões.O objetivo é permitir que o controlador gráfico seja integrado a um sistema computacional, com a imagem sendo lida a partir de um arquivo BITMAP, transferida e processada pelo coprocessador
+O presente projeto insere-se no âmbito do desenvolvimento de uma **API (Application Programming Interface)** e de um **driver de software** para o coprocessador gráfico executando na FPGA da plataforma DE1-SoC.A API, que constitui a segunda etapa, deve ser implementada em **linguagem Assembly** e deve traduzir um repertório de instruções (ISA) para o coprocessador, utilizando comandos que replicam as operações previamente implementadas via chaves e botões.O objetivo é permitir que o controlador gráfico seja integrado a um sistema computacional, com a imagem sendo lida a partir de um arquivo BITMAP, transferida e processada pelo coprocessador
 .
-Além da implementação em Assembly, o projeto exige o desenvolvimento de uma **aplicação principal em linguagem C**, que é a **terceira etapa**.Esta aplicação deverá carregar o arquivo BITMAP, ligar-se ao driver (biblioteca Assembly) e controlar as operações de redimensionamento através de uma interface de texto.Os comandos de zoom *in* e *zoom out* devem ser acionados pelas teclas '+' (mais) e '-' (menos), respectivamente.A solução deve ser compatível com o processador **ARM (HPS)** e utilizar as interfaces da placa DE1-SoC.
+Além da implementação em Assembly, o projeto exige o desenvolvimento de uma **aplicação principal em linguagem C**, que é a **terceira etapa**.Esta aplicação deverá carregar o arquivo BITMAP, ligar-se ao driver (biblioteca Assembly) e controlar as operações de redimensionamento através dO terminal.A solução deve ser compatível com o processador **ARM (HPS)** e utilizar as interfaces da placa DE1-SoC.
 
 Este relatório detalha o processo de desenvolvimento e os requisitos técnicos para as etapas 2 e 3, abrangendo aspectos como mapeamento de memória em arquitetura ARM, programação em Assembly e link-edição de módulos objeto.Através da criação de um *script* de compilação (*Makefile*) e de uma documentação detalhada no `README`, busca-se não apenas cumprir os objetivos técnicos, mas também fornecer uma solução completa para a interface hardware-software na DE1-SoCs.
 
 ## 📋 Requisitos do Projeto
 * O código da API deve ser escrito em linguagem **Assembly**
 * O sistema só poderá utilizar os **componentes disponíveis na placa DE1-SoC**.
-* 
 * Deverão ser implementados na API os **comandos da ISA** (Instruction Set Architecture) do coprocessador, utilizando operações que foram implementadas anteriormente via chaves e botões
 * As imagens são representadas em **escala de cinza**[cite: 130].
 * Cada pixel deverá ser representado por um número inteiro de **8 bits**
@@ -36,8 +35,7 @@ Este relatório detalha o processo de desenvolvimento e os requisitos técnicos 
 * A aplicação deverá ter as seguintes operações através de uma **interface texto**:
     * Carregar arquivo **BITMAP**
     * Selecionar **algoritmo de zoom**
-    * Utilizar a tecla **'+' (mais) para a operação de zoom *in*** (ampliação)
-    * Utilizar a tecla **'-' (menos) para a operação de zoom *out*** (redução)
+
 
 ## 🛠️ Recursos Utilizados
 
@@ -92,8 +90,8 @@ Esta seção descreve a arquitetura de software e hardware utilizada para permit
 
 A comunicação fundamental entre o HPS e a FPGA ocorre através de **pontes (bridges) AXI**. Neste projeto, utilizamos a **Lightweight HPS-to-FPGA (LWH2F) Bridge**.
 
-  * **Mapeamento em Memória:** Esta ponte funciona como uma interface **mapeada em memória**. Isso significa que, do ponto de vista do HPS, os registradores dos periféricos na FPGA (como os PIOs `pio_led` e `pio_sw`) aparecem como se fossem posições de memória comuns.
-  * **Endereço Base:** O Qsys/Platform Designer atribui um **endereço físico base** para esta ponte. No nosso caso, é `0xFF200000`. Todos os periféricos conectados a esta ponte terão seus registradores acessíveis em **offsets** (deslocamentos) relativos a este endereço base.
+  * **Mapeamento em Memória:** Esta ponte funciona como uma interface **mapeada em memória**. Isso significa que, do ponto de vista do HPS, os registradores dos periféricos na FPGA (como os PIOs `pio_in`  e `pio_out` ) aparecem como se fossem posições de memória comuns.
+  * **Endereço Base:** O Qsys/Platform Designer atribui um **endereço físico base** para esta ponte. No nosso caso, é `0xFF000000`. Todos os periféricos conectados a esta ponte terão seus registradores acessíveis em **offsets** (deslocamentos) relativos a este endereço base.
 
 ### 📁 O Arquivo de Cabeçalho `.h` (Definição do Hardware para o Software)
 
@@ -108,15 +106,15 @@ Para que o software (seja C ou Assembly) saiba *onde* encontrar os registradores
 
 ### 📚 A Biblioteca Assembly 
 
-A API em Assembly (`.s`) atua como um driver de baixo nível, encapsulando o acesso direto ao hardware.
+A API em Assembly (`api.s`) atua como um driver de baixo nível, encapsulando o acesso direto ao hardware.
 
-  * **Mapeamento de Memória via Syscalls:** A função `iniciarCoprocessor` é responsável por tornar o endereço físico da ponte (`0xFF200000`) acessível ao programa. Ela faz isso **diretamente**, usando **chamadas de sistema (syscalls)** do Linux:
+  * **Mapeamento de Memória via Syscalls:** A função `iniciarCoprocessor` é responsável por tornar o endereço físico da ponte (`0xFF000000`) acessível ao programa. Ela faz isso **diretamente**, usando **chamadas de sistema (syscalls)** do Linux:
       * **`open` (syscall \#5):** Abre o arquivo `/dev/mem`, que representa a memória física do sistema.
       * **`mmap2` (syscall \#192):** Pede ao Kernel para mapear o endereço físico da ponte (`FPGA_BRIDGE`) em um **endereço virtual** que o programa pode usar. Esse ponteiro virtual é armazenado na variável global `FPGA_ADDRS`.
-  * **Funções Primitivas (`write_pio`, `read_pio`):** Estas funções recebem um **offset** (como `PIO_LED_OFFSET` ou `PIO_SW_OFFSET`, definidos com `.equ` baseados no `.h`) e, opcionalmente, um valor. Elas calculam o endereço virtual final (`FPGA_ADDRS + offset`) e usam as instruções ARM `STR` (Store Register) ou `LDR` (Load Register) para escrever ou ler diretamente no endereço mapeado, controlando assim os PIOs.
-  * **Encapsulamento:** Funções de mais alto nível (como `acender_led_especifico`, `ler_switch_especifico`, ou as `funcao_enviar_X` do exemplo C) podem ser construídas sobre essas primitivas, tornando o controle do hardware mais abstrato para quem chama a API. A função `encerrarCoprocessor` usa as syscalls `munmap` e `close` para liberar os recursos.
+  * **Funções Primitivas (`write_pio`, `read_pio`):** Estas funções recebem um **offset** (como `PIO_IN_OFFSET` ou `PIO_OUT_OFFSET`, definidos com `.equ` baseados no `.h`) e, opcionalmente, um valor. Elas calculam o endereço virtual final (`FPGA_ADDRS + offset`) e usam as instruções ARM `STR` (Store Register) ou `LDR` (Load Register) para escrever ou ler diretamente no endereço mapeado, controlando assim os PIOs.
+* **Funções Auxiliares** instruções de nome`funcao_enviar` que usam uma **função helper interna** `write_pio_helper`, `write_to_pio`  e `cleanup_memory`.
 
-## ✴️ Main 
+### ✴️ Main 
 
 O programa C (`.c`) contém a lógica principal da aplicação e utiliza a API Assembly para interagir com o hardware.
 
@@ -133,15 +131,37 @@ O processo para criar o programa final que roda no HPS envolve três etapas prin
 3.  **Linkagem (`.o` + `.o` -\> Executável):** O **Linker** (geralmente invocado pelo `gcc` quando não se usa `-c`) pega todos os arquivos objeto (`.o`). Sua principal tarefa é **resolver as referências**: ele encontra a chamada para `iniciarCoprocessor` no `.o` do C e a conecta à definição de `iniciarCoprocessor` no `.o` do Assembly. Ele combina todo o código de máquina, organiza as seções de dados e código, e produz um **arquivo executável** final que o Linux pode carregar e rodar.
 
 
+### Esquema do projeto visão Top-Down 
+
+![Texto Alternativo da Imagem](assets/exemplo.png)
+
+https://mermaid.live/edit#pako:eNpVjbFugzAQhl_FuqmVSAQxBPBQqSFtlkjtkKmQwQoHRg02MkZpCrx7DVHU9qY7fd__Xw8nlSMwKM7qchJcG3LYZpLYeU4ToavW1Lw9ksXiadihIbWSeB3I5mGnSCtU01SyfLz5m0kiSb-fNCRGVPJzvKFkzr9JHMg23fPGqOb4lxwuaiAvafUubP1_IjTa1GtacFbwxYlrknA9K-BAqascmNEdOlCjrvl0Qj_RDIzAGjNgds2x4N3ZZJDJ0cYaLj-Uqu9JrbpSgK0_t_bqmpwb3Fa81PxXQZmjTlQnDTCPzhXAevgCRt1o6Qer2PNouI4D6jlwBRa4y3UU-vHaiwLqrkLqjw58z0_d5QTsRG4c-6Hv0fEHO2p3Ag
+
+## 📚 Funcionamento da API
+
+### Constantes
+* LW_BRIDGE_BASE  = 0xFF200000   `Corresponde ao endereço físico da ponte na FPGA`
+* LW_BRIDGE_SPAN  = 0x00020000   `Tamanho da janela (128KB ou 20KB)`
+* PIO_DATA_OFFSET = 0x00000000    `Onde está o PIO dentro da ponte`
+
+###  Variáveis globais exlcusivas
+* asm_lw_virtual_base: .word 0   `Corresponde ao ponteiro virtual após mmap`
+* asm_mem_fd:          .word -1  `File descriptor de /dev/mem`
+
+### 
+*
+
+
+
+
+![Texto Alternativo da Imagem](assets/api.png)
+
+
+
 
 
 ## 📈 Análise dos Resultados
 
-
-## 📉 Desempenho e Uso de Recursos
-
-
-## 💭 Discussões e Melhorias Futuras
 
 
 ## 🏁 Conclusão
@@ -155,4 +175,4 @@ Este projeto foi desenvolvido por:
 - [**Maria Clara**](https://github.com/)
 - [**Vitor Dórea**](https://github.com/)
 
-Agradecimentos ao(a) professor(a) **Angelo Duarte** pela orientação.
+Agradecimentos ao professor **Angelo Duarte** e aos tutored **Wesley** e **Alan**.
