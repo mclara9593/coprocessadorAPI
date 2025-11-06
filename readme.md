@@ -4,12 +4,25 @@
 - 🎯 [Introdução](#introdução)
 - 🎯 [Objetivos e Requisitos do Problema](#objetivos-e-requisitos-do-problema)
 - 🛠️ [Recursos Utilizados](#recursos-utilizados)
-
 - 🚀 [Desenvolvimento e Descrição em Alto Nível](#desenvolvimento-e-descrição-em-alto-nível)
-- 🎛️ [Ponte de comunicação HPS FPGA](#ponte-de-comunicação-hps-fpga)
-- 🧮 [API ()](#api)
 - 🧪 [Testes, Simulações, Resultados e Discussões](#testes-simulações-resultados-e-discussões)
+- [Requisitos do Projeto](#-requisitos-do-projeto)
+- 
 
+
+4.2.3.
+ Especificação dos hardwares usados nos testes;     FALTA
+4.2.4.
+ Descrição detalhada do processo para instalação e configuração de
+ambiente para uso da solução;                     FALTA
+4.2.6.
+ Análise dos resultados alcançados.             FALTTA
+
+projeto falta o makefile
+
+
+
+  
 ---
 
 ## Introdução
@@ -25,7 +38,7 @@ Este relatório detalha o processo de desenvolvimento e os requisitos técnicos 
 * O código da API deve ser escrito em linguagem **Assembly**
 * O sistema só poderá utilizar os **componentes disponíveis na placa DE1-SoC**.
 * Deverão ser implementados na API os **comandos da ISA** (Instruction Set Architecture) do coprocessador, utilizando operações que foram implementadas anteriormente via chaves e botões
-* As imagens são representadas em **escala de cinza**[cite: 130].
+* As imagens são representadas em **escala de cinza*.
 * Cada pixel deverá ser representado por um número inteiro de **8 bits**
 * A imagem deve ser lida a partir de um arquivo e **transferida para o coprocessador**.
 * O coprocessador deve ser **compatível com o processador ARM (HPS)** para viabilizar o desenvolvimento da solução.
@@ -82,7 +95,7 @@ Ferramenta de integração de sistemas do software Intel® Quartus® Prime,que c
 - Referência oficial:
 [**Plataform Designer**](https://www.intel.com/content/www/us/en/docs/programmable/683738/current/platform-designer.html)
 
-## 📝 Descrição de alto nível
+## 🚀  Descrição de alto nível
 
 Esta seção descreve a arquitetura de software e hardware utilizada para permitir que o processador HPS (Hard Processor System), rodando um sistema operacional Linux, controle periféricos customizados (PIOs - Parallel Input/Output) implementados na lógica da FPGA. A interação é feita através de uma API (Application Programming Interface) de baixo nível escrita em Assembly ARMv7-a.
 
