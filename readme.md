@@ -7,7 +7,7 @@
 - 🚀 [Desenvolvimento e Descrição em Alto Nível](#desenvolvimento-e-descrição-em-alto-nível)
 - 🧪 [Testes, Simulações, Resultados e Discussões](#testes-simulações-resultados-e-discussões)
 - [Requisitos do Projeto](#-requisitos-do-projeto)
-- 
+  
 
 
 4.2.3.
@@ -18,12 +18,9 @@ ambiente para uso da solução;                     FALTA
 4.2.6.
  Análise dos resultados alcançados.             FALTTA
 
-projeto falta o makefile
+projeto falta o makefile e falta ajeitar esse indice
 
 
-
-  
----
 
 ## Introdução
 O desenvolvimento de um módulo embarcado para redimensionamento de imagens é crucial para sistemas de vigilância e exibição em tempo real, demandando soluções que unam a eficiência do hardware reconfigurável à flexibilidade do software de controle.Neste contexto, o projeto visa concluir um sistema capaz de aplicar zoom (ampliação) ou *downscale* (redução) de imagens, simulando interpolação visual, com foco nas etapas de interface e aplicação.
@@ -116,6 +113,41 @@ Para que o software (seja C ou Assembly) saiba *onde* encontrar os registradores
     #define PIO_LED_BASE 0x0
     ```
     Isso informa ao software que os registradores do `pio_led` começam no offset `0` a partir do endereço base da ponte (`0xFF200000`). **É crucial que os offsets usados no software correspondam exatamente aos definidos neste arquivo.** (Nota: Precisamos confirmar o offset do `pio_sw` neste arquivo ou no Qsys).
+
+
+1.  **(`main.c`)**:
+
+      * **Não** inclui `hps_0.h` (ele não precisa saber `PIO_DATA_OFFSET`).
+      * **Não** calcula nenhum ponteiro.
+      * Ele apenas chama `init_memory()` no início [cite: main.c].
+      * Quando quer enviar dados, ele chama `escrever_bus_0_9(valor_de_10_bits);` [cite: main.c]. O C não sabe onde esse valor vai parar, ele apenas confia na API.
+
+2.  **(`api.s`)**:
+
+      * **Define a constante internamente**: O offset está "hard-coded" (fixo) dentro do próprio Assembly:
+        ```assembly
+        .equ PIO_DATA_OFFSET,   0x00000000
+        ```
+      * `init_memory()`: Mapeia o `LW_BRIDGE_BASE` (`0xFF200000`) e salva o ponteiro virtual na variável global `asm_lw_virtual_base` [cite: api.s].
+      * `escrever_bus_0_9(r0)`: Esta função (e a `write_pio_masked` que ela chama) faz o trabalho que o C fazia antes:
+        1.  Lê o ponteiro base de `asm_lw_virtual_base`.
+        2.  Adiciona o offset: `add r4, r4, #PIO_DATA_OFFSET`.
+        3.  Escreve o valor (`str r3, [r4]`) [cite: api.s].
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ### 📚 A Biblioteca Assembly 
 
