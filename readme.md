@@ -1,13 +1,20 @@
 # 📝 Relatório Técnico - Coprocessador em FPGA
 
 ## 📑 Sumário
-- 🎯 [Introdução](#introdução)
+-  [Introdução](#introdução)
 - 🎯 [Objetivos e Requisitos do Problema](#objetivos-e-requisitos-do-problema)
 - 🛠️ [Recursos Utilizados](#recursos-utilizados)
 - 🚀 [Desenvolvimento e Descrição em Alto Nível](#desenvolvimento-e-descrição-em-alto-nível)
-- 🧪 [Testes, Simulações, Resultados e Discussões](#testes-simulações-resultados-e-discussões)
-- [Requisitos do Projeto](#-requisitos-do-projeto)
-  
+- [📚 Funcionamento da API](funcionamento_da_api)
+- 🧪 [Testes,resultados e discussões](#testes_resultados_e_discussões)
+
+
+Aqui está a seção do sumário formatada e atualizada para incluir todos os tópicos principais do seu relatório, conforme os cabeçalhos `##` presentes no documento:
+
+Entendido. Peço desculpas pelo mal-entendido. Você quer que todos os itens do sumário sigam o mesmo padrão de formatação, usando o emoji `🎯` no início.
+
+Aqui está o sumário corrigido, mantendo o formato solicitado para todos os tópicos principais do relatório:
+
 
 
 4.2.3.
@@ -86,7 +93,7 @@ Controlar uma tela VGA requer a manipulação de dois pinos de sincronização d
 - Referência oficial:
 [**Verilog VGA module**](https://vanhunteradams.com/DE1/VGA_Driver/Driver.html)
 
-#### Plataform Designer
+#### 🧑‍💻 Plataform Designer
 Ferramenta de integração de sistemas do software Intel® Quartus® Prime,que captura projetos de hardware em nível de sistema com alto nível de abstração e automatiza a tarefa de definir e integrar componentes personalizados da Linguagem de Descrição de Hardware (HDL).Ele empacota e integra seus componentes personalizados com componentes IP da Intel e de terceiros e cria automaticamente a lógica de interconexão eliminando assim a tarefa demorada e propensa a erros de escrever HDL para especificar conexões em nível de sistema.
 
 - Referência oficial:
@@ -102,51 +109,28 @@ A comunicação fundamental entre o HPS e a FPGA ocorre através de **pontes (br
 
   * **Mapeamento em Memória:** Esta ponte funciona como uma interface **mapeada em memória**. Isso significa que, do ponto de vista do HPS, os registradores dos periféricos na FPGA (como os PIOs `pio_in`  e `pio_out` ) aparecem como se fossem posições de memória comuns.
   * **Endereço Base:** O Qsys/Platform Designer atribui um **endereço físico base** para esta ponte. No nosso caso, é `0xFF000000`. Todos os periféricos conectados a esta ponte terão seus registradores acessíveis em **offsets** (deslocamentos) relativos a este endereço base.
+  
 
-### 📁 O Arquivo de Cabeçalho `.h` (Definição do Hardware para o Software)
+### 📁Método de linkagem (Definição do Hardware para o Software)
 
-Para que o software (seja C ou Assembly) saiba *onde* encontrar os registradores de cada periférico, o Qsys/Platform Designer gera automaticamente um arquivo de cabeçalho (geralmente `hps_0.h` ou similar).
-
-  * **Mapa de Endereços:** Este arquivo `.h` contém diretivas `#define` que mapeiam os nomes dos componentes do Qsys para seus **offsets** relativos ao endereço base da ponte.
-  * **Exemplo:** O arquivo `hps_0.h` do nosso projeto define:
-    ```c
-    #define PIO_LED_BASE 0x0
-    ```
-    Isso informa ao software que os registradores do `pio_led` começam no offset `0` a partir do endereço base da ponte (`0xFF200000`). **É crucial que os offsets usados no software correspondam exatamente aos definidos neste arquivo.** (Nota: Precisamos confirmar o offset do `pio_sw` neste arquivo ou no Qsys).
+ Saber *onde* encontrar os registradores de cada periférico
 
 
-1.  **(`main.c`)**:
+1.  **`main.c`**:
 
-      * **Não** inclui `hps_0.h` (ele não precisa saber `PIO_DATA_OFFSET`).
-      * **Não** calcula nenhum ponteiro.
-      * Ele apenas chama `init_memory()` no início [cite: main.c].
-      * Quando quer enviar dados, ele chama `escrever_bus_0_9(valor_de_10_bits);` [cite: main.c]. O C não sabe onde esse valor vai parar, ele apenas confia na API.
-
-2.  **(`api.s`)**:
+      * Chama `init_memory()` no início 
+      * Quando quer enviar dados, ele chama `escrever_bus_0_9(valor_de_10_bits);`. 
+2.  **`api.s`**:
 
       * **Define a constante internamente**: O offset está "hard-coded" (fixo) dentro do próprio Assembly:
         ```assembly
         .equ PIO_DATA_OFFSET,   0x00000000
         ```
-      * `init_memory()`: Mapeia o `LW_BRIDGE_BASE` (`0xFF200000`) e salva o ponteiro virtual na variável global `asm_lw_virtual_base` [cite: api.s].
+      * `init_memory()`: Mapeia o `LW_BRIDGE_BASE` (`0xFF200000`) e salva o ponteiro virtual na variável global `asm_lw_virtual_base`.
       * `escrever_bus_0_9(r0)`: Esta função (e a `write_pio_masked` que ela chama) faz o trabalho que o C fazia antes:
         1.  Lê o ponteiro base de `asm_lw_virtual_base`.
         2.  Adiciona o offset: `add r4, r4, #PIO_DATA_OFFSET`.
-        3.  Escreve o valor (`str r3, [r4]`) [cite: api.s].
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        3.  Escreve o valor (`str r3, [r4]`).
 
 
 ### 📚 A Biblioteca Assembly 
@@ -159,6 +143,7 @@ A API em Assembly (`api.s`) atua como um driver de baixo nível, encapsulando o 
   * **Funções Primitivas (`write_pio`, `read_pio`):** Estas funções recebem um **offset** (como `PIO_IN_OFFSET` ou `PIO_OUT_OFFSET`, definidos com `.equ` baseados no `.h`) e, opcionalmente, um valor. Elas calculam o endereço virtual final (`FPGA_ADDRS + offset`) e usam as instruções ARM `STR` (Store Register) ou `LDR` (Load Register) para escrever ou ler diretamente no endereço mapeado, controlando assim os PIOs.
 * **Funções Auxiliares** instruções de nome`funcao_enviar` que usam uma **função helper interna** `write_pio_helper`, `write_to_pio`  e `cleanup_memory`.
 
+
 ### ✴️ Main 
 
 O programa C (`.c`) contém a lógica principal da aplicação e utiliza a API Assembly para interagir com o hardware.
@@ -166,6 +151,7 @@ O programa C (`.c`) contém a lógica principal da aplicação e utiliza a API A
   * **Declarações `extern`:** O C utiliza declarações `extern` (ex: `extern void* iniciarCoprocessor(void);`, `extern void write_pio(unsigned int offset, unsigned int value);` - adaptando a assinatura se necessário) para informar ao compilador que essas funções existem, mesmo que sua implementação esteja em outro arquivo (o `.s`).
   * **Chamada de Funções:** O código C chama as funções Assembly como se fossem funções C normais (ex: `lw_virtual = iniciarCoprocessor();`, `funcao_apagar_tudo(led_ptr);`). O compilador C gera o código de máquina apropriado para passar os parâmetros (nos registradores corretos, conforme a convenção de chamada ARM EABI) e pular para o endereço da função Assembly.
   * **Lógica de Controle:** O C decide *quando* e *com quais valores* chamar as funções da API Assembly, implementando a lógica desejada (ler botões, acender LEDs, processar dados, etc.). No exemplo `pograma.c`, ele lê a entrada do usuário e chama a função Assembly correspondente.
+
 
 ### 🏗️ Montagem e Linkagem
 
@@ -176,40 +162,271 @@ O processo para criar o programa final que roda no HPS envolve três etapas prin
 3.  **Linkagem (`.o` + `.o` -\> Executável):** O **Linker** (geralmente invocado pelo `gcc` quando não se usa `-c`) pega todos os arquivos objeto (`.o`). Sua principal tarefa é **resolver as referências**: ele encontra a chamada para `iniciarCoprocessor` no `.o` do C e a conecta à definição de `iniciarCoprocessor` no `.o` do Assembly. Ele combina todo o código de máquina, organiza as seções de dados e código, e produz um **arquivo executável** final que o Linux pode carregar e rodar.
 
 
+
 ### Esquema do projeto visão Top-Down 
 
 ![Texto Alternativo da Imagem](assets/exemplo.png)
 
 https://mermaid.live/edit#pako:eNpVjbFugzAQhl_FuqmVSAQxBPBQqSFtlkjtkKmQwQoHRg02MkZpCrx7DVHU9qY7fd__Xw8nlSMwKM7qchJcG3LYZpLYeU4ToavW1Lw9ksXiadihIbWSeB3I5mGnSCtU01SyfLz5m0kiSb-fNCRGVPJzvKFkzr9JHMg23fPGqOb4lxwuaiAvafUubP1_IjTa1GtacFbwxYlrknA9K-BAqascmNEdOlCjrvl0Qj_RDIzAGjNgds2x4N3ZZJDJ0cYaLj-Uqu9JrbpSgK0_t_bqmpwb3Fa81PxXQZmjTlQnDTCPzhXAevgCRt1o6Qer2PNouI4D6jlwBRa4y3UU-vHaiwLqrkLqjw58z0_d5QTsRG4c-6Hv0fEHO2p3Ag
 
+---
+
 ## 📚 Funcionamento da API
 
-### Constantes
-* LW_BRIDGE_BASE  = 0xFF200000   `Corresponde ao endereço físico da ponte na FPGA`
-* LW_BRIDGE_SPAN  = 0x00020000   `Tamanho da janela (128KB ou 20KB)`
-* PIO_DATA_OFFSET = 0x00000000    `Onde está o PIO dentro da ponte`
+- O arquivo `api.s` implementa uma **API de baixo nível** para controlar periféricos PIO (Parallel Input/Output) na FPGA através da ponte HPS-FPGA da placa DE1-SoC. Ele funciona como uma **camada de abstração** entre o software (`main.c`) e o hardware (FPGA).
 
-###  Variáveis globais exlcusivas
-* asm_lw_virtual_base: .word 0   `Corresponde ao ponteiro virtual após mmap`
-* asm_mem_fd:          .word -1  `File descriptor de /dev/mem`
+### 📐 Arquitetura e Diretivas Iniciais
 
-### 
-*
+```assembly
+.syntax unified
+.thumb
+.text
+```
+
+- **`.syntax unified`**: Usa sintaxe ARM moderna (unificada)
+- **`.thumb`**: Gera código Thumb-2 (instruções de 16/32 bits, mais compactas)
+- **`.text`**: Indica início da seção de código executável
+
+---
+
+### 🔢 Constantes Globais (`.equ`)
+
+```assembly
+.equ LW_BRIDGE_BASE,    0xFF200000
+.equ LW_BRIDGE_SPAN,    0x00020000
+.equ PIO_DATA_OFFSET,   0x00000000
+.equ PIO_BUS_0_9_MASK,  0x000003FF
+.equ PIO_BUS_10_17_MASK, 0x0003FC00
+```
+
+#### **LW_BRIDGE_BASE** (0xFF200000)
+- **Endereço físico** da ponte Lightweight HPS-to-FPGA
+- É onde o hardware da FPGA está "mapeado" na memória do processador ARM
+- Pense nisso como o "endereço inicial" de todos os periféricos FPGA
+
+#### **LW_BRIDGE_SPAN** (0x00020000 = 128KB)
+- Tamanho da região de memória da ponte
+- Define quanto espaço será mapeado via `mmap`
+
+#### **PIO_DATA_OFFSET** (0x00000000)
+- Deslocamento (offset) do registrador de dados do PIO dentro da ponte
+- Neste caso, está no início (offset 0)
+
+#### **Máscaras de Bits**
+- **`PIO_BUS_0_9_MASK`** = `0x000003FF` = `0b0000001111111111`
+  - Seleciona os 10 bits inferiores (bits 0-9)
+  - Usado para controlar **dados de imagem/pixel**
+
+- **`PIO_BUS_10_17_MASK`** = `0x0003FC00` = `0b0000001111111100000000`
+  - Seleciona os bits 10-17 (8 bits)
+  - Usado para controlar **LEDs/comandos de algoritmo**
+
+---
+
+### 🗃️ Variáveis Globais (`.data`)
+
+```assembly
+.data
+dev_mem_path:      .asciz "/dev/mem"
+.align 4
+asm_lw_virtual_base: .word 0
+asm_mem_fd:          .word -1
+asm_pio_current_state: .word 0
+```
+
+#### **dev_mem_path**
+- String terminada em zero (`\0`) com o caminho `/dev/mem`
+- **`/dev/mem`** é um arquivo especial do Linux que representa a **memória física** do sistema
+
+#### **asm_lw_virtual_base**
+- Armazena o **ponteiro virtual** retornado pelo `mmap`
+- Inicialmente 0, será preenchido por `init_memory()`
+- É o endereço que o programa usa para acessar o hardware
+
+#### **asm_mem_fd**
+- Armazena o **file descriptor** de `/dev/mem`
+- Inicialmente -1 (inválido)
+
+#### **asm_pio_current_state**
+- **Cache do estado atual** dos PIOs
+- Permite fazer escritas parciais sem perder bits de outros barramentos
+
+---
+#### Funções
+
+*  `init_memory` Mapeia o hardware da FPGA na memória virtual do processo.
+
+#### Abrir `/dev/mem`**
+- **`open()`** é uma syscall que retorna um **file descriptor**
+- **`O_RDWR`** (0x0002): Leitura e escrita
+- **`O_SYNC`** (0x00101000): Operações síncronas (sem cache)
+- Resultado em `r0`: fd se sucesso, -1 se erro
+
+#### **`mmap` - Mapeamento de Memória**
+**Sintaxe**: `void* mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)`
+
+**Parâmetros**:
+- `r0` (addr): `NULL` → kernel escolhe o endereço virtual
+- `r1` (length): `0x20000` → mapeia 128KB
+- `r2` (prot): `PROT_READ | PROT_WRITE` → permite ler e escrever
+- `r3` (flags): `MAP_SHARED` → mudanças são visíveis no hardware
+- Pilha: `fd` (r4) e `offset` (LW_BRIDGE_BASE)
+
+**Retorno**: Endereço virtual onde o hardware foi mapeado (ou -1 em caso de erro)
+
+####  `cleanup_memory` Libera os recursos alocados.
+
+
+#### `write_pio_masked` **Função interna** que faz escritas **parciais** nos PIOs (preserva outros bits).
+
+
+#### **`escrever_bus_0_9`** Escreve valores de 10 bits (dados de pixel/imagem).
 
 
 
+#### **`set_zoom_4x`** - Zoom 4x
+```
+0x8400 = 0b100001000000000
+         │││││││││└─────────── Bit 10: 0
+         │└──────────────────── Bits 11-16: diversos
+         └───────────────────── Bit 17: 1 (comando de zoom)
+```
 
-![Texto Alternativo da Imagem](assets/api.png)
+#### Funções de Controle de Algoritmos (LEDs)
+
+Enviam valores específicos para o barramento de LEDs (bits 10-17).
+
+#### **`funcao_enviar_1`**
+**Padrão**: `(valor << 10)` desloca o valor para os bits 10-17.
+
+- `funcao_enviar_2`: `(2 << 10)` = `0x800`
+- `funcao_enviar_4`: `(4 << 10)` = `0x1000`
+- `funcao_enviar_8`: `(8 << 10)` = `0x2000`
+
+
+---
+
+#### 🔗 Integração C ↔ Assembly
+
+```c
+extern void set_zoom_4x(void);  // Declara função Assembly
+
+// Chamada:
+set_zoom_4x();  // r0, r1, r2, r3 podem ser usados livremente
+```
+
+### **Convenção ARM EABI**:
+- **Parâmetros**: `r0-r3` (primeiros 4 parâmetros)
+- **Retorno**: `r0`
+- **Preservados**: `r4-r11, sp, lr`
+- **Temporários**: `r0-r3, r12`
 
 
 
+## 🏁 Testes
 
 
-## 📈 Análise dos Resultados
+A etapa de testes foi crucial para validar a complexa interação entre o software de alto nível (Aplicação C), o driver de baixo nível (API Assembly) e o hardware (lógica Verilog na FPGA). Os testes foram divididos em duas categorias principais: testes de software (compilação, linkagem) e testes de integração hardware-software (execução na placa).
+
+### Especificação dos Hardwares e Softwares Usados
+---
+
+Para garantir a reprodutibilidade dos testes, o ambiente foi padronizado da seguinte forma:
+
+* Hardware (Plataforma Alvo):
+  * Placa de Desenvolvimento Terasic DE1-SoC.
+  * Processador (HPS): Dual-core ARM Cortex-A9 (executando o software).
+
+  * FPGA: Cyclone V SoC (executando o hardware Verilog).
+
+* Periféricos: Monitor VGA, Chaves (Switches) da placa.
+
+* Software (Ambiente de Desenvolvimento Host - PC):
+
+  * Intel Quartus Prime: Utilizado para a síntese, compilação e geração do arquivo de programação (.rbf) a partir dos módulos Verilog (ghrd_top.v, processo_imagem.v).
+
+  * Software (Ambiente de Execução Alvo - DE1-SoC):
+
+  * Sistema Operacional: Linux embarcado (distribuição Linaro/Ubuntu).
+
+* Toolchain GNU ARM:
+
+  * gcc (GNU Compiler Collection): Usado para compilar a aplicação C (main.c) e para linkar o executável final.
+
+  * as (GNU Assembler): Usado (implicitamente pelo gcc) para montar a API Assembly (api.s).
+
+  * libc (Biblioteca C Padrão): Essencial, pois a API Assembly (api.s) chama funções da libc como open, mmap, close e munmap.
+
+### Execução 
+---
+
+O processo de teste de integração da solução completa seguiu um fluxo rigoroso de 3 etapas, executado a cada nova iteração do software ou hardware:
+
++ Etapa 1: Programação da FPGA (Hardware)
+
+O projeto Verilog (ghrd_top.v, processo_imagem.v, etc.) foi compilado no Quartus Prime no PC host.
 
 
++ Etapa 2: Compilação e Linkagem do Software (Software)
 
-## 🏁 Conclusão
+Os arquivos-fonte `main.c` e `api.s` foram colocados no mesmo diretório na DE1-SoC.
+
+O comando de compilação e linkagem unificado foi executado:
+
+gcc -o meu_programa main.c api.s -lm
+
+gcc: Invoca o toolchain.
+
+-o meu_programa: Define o nome do executável de saída.
+
+main.c: O gcc compila o código C.
+
+api.s: O gcc automaticamente invoca o montador (as) para api.s e, crucialmente, linka as chamadas (bl open, bl mmap  com as implementações reais na libc.
+
+-lm: Linka a biblioteca matemática (necessária para usleep ou outras funções C).
+
+  + Etapa 3: Execução e Teste Funcional
+
+Configuração do Hardware: As chaves físicas SW[9] (Reset) e SW[5:2] (Modo de Processamento) foram colocadas na posição 0 (desligado), conforme a lógica do Verilog, para habilitar o modo de "Carregamento de Imagem" pelo HPS.
+
+Execução do Software: O programa foi executado com privilégios de superusuário (necessário para init_memory acessar /dev/mem):
+
+sudo ./meu_programa
+
+
+### Resultados Alcançados
+
+O processo de teste revelou diversos pontos críticos sobre a arquitetura HPS-FPGA.
+
++ Teste 1: Validação da API de Memória (init_memory)
+
+Procedimento: Execução do programa compilado (sudo ./meu_programa).
+
+Resultado: O terminal exibiu a mensagem "Hardware (ponte HPS-FPGA) mapeado com sucesso." 
+
+Análise: Este resultado confirmou que o método de linkagem híbrido foi bem-sucedido. A API em Assembly (api.s) conseguiu chamar com sucesso as funções open e mmap da libc, e o ponteiro virtual para a ponte 0xFF200000 foi obtido e armazenado corretamente na variável global asm_lw_virtual_base. Falhas neste teste (como esquecer o sudo) resultaram em erro imediato, validando a robustez da checagem de erro.
+
++ Teste 2: Validação da Escrita no PIO (Carregamento do Bitmap)
+
+Procedimento: Após a inicialização bem-sucedida, selecionar a "Opção 1: Enviar Imagem BMP" e fornecer um arquivo .bmp válido.
+
+Resultado Inicial (Falha): Conforme discutido no desenvolvimento, a primeira tentativa resultou no "piscar" do monitor VGA. A saída do terminal mostrava o C enviando os pixels, mas o VGA não exibia a imagem.
+
+Análise da Falha (Depuração): Esta falha foi a mais importante da integração. A análise cruzada do software Assembly (api.s antigo) e do hardware Verilog (processo_imagem.v) revelou uma incompatibilidade de interface (contrato de bits):
+
+O Software (baseado em um projeto anterior) estava enviando um pacote de 32 bits contendo endereço, dados e WREN (ex: 0x0807FF05).
+
+O Hardware (processo_imagem.v) esperava um pacote de 10 bits ([bit 9: WREN | bits 7:0: DADO]) e gerava seu próprio endereço internamente com um contador (hps_write_addr_counter).
+
+Correção e Resultado Final: Os arquivos main.c e api.s foram corrigidos para enviar apenas o pacote de 10 bits (uint16_t data_to_send = PIO_WRITE_ENABLE | gray_pixel;). Após esta correção, a repetição do Teste 2 (com as chaves SW[5:2] em 0000) resultou no sucesso do carregamento: a imagem BMP foi corretamente lida, convertida para escala de cinza pelo C, enviada pela API Assembly e exibida no monitor VGA.
+
++ Teste 3: Validação dos Barramentos Independentes (Lógica write_pio_masked)
+
+Procedimento: Com a imagem carregada, entrar na "Opção 2: Entrar no modo de controle de Algoritmos".
+
+Resultado: Foi possível selecionar comandos (funcao_enviar_1, set_zoom_4x, etc.) sem afetar ou corromper a imagem que estava sendo enviada pelo barramento de bits 0-9.
+
+Análise: Este teste validou a eficácia da função write_pio_masked e da variável asm_pio_current_state . A lógica "Read-Modify-Write" implementada em Assembly permitiu que o HPS tratasse um único PIO de 18 bits como dois barramentos virtuais independentes (um de 10 bits para imagem, outro de 8 bits para comandos), cumprindo um requisito-chave do readme.md de forma eficiente.
 
 	
 ## ✍️ Colaboradores
@@ -220,4 +437,4 @@ Este projeto foi desenvolvido por:
 - [**Maria Clara**](https://github.com/)
 - [**Vitor Dórea**](https://github.com/)
 
-Agradecimentos ao professor **Angelo Duarte** e aos tutored **Wesley** e **Alan**.
+Agradecimentos ao professor **Angelo Duarte** e aos tutores **Wesley** e **Alan**.
