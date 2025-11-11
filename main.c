@@ -11,28 +11,9 @@
 #include <stdint.h>
 #include <string.h>
 #include <unistd.h> // Para usleep
-
-// --- Protótipos das Funções em Assembly (de api_pio_unificado.s) ---
-// Funções de gerenciamento de memória
-extern int init_memory(void);
-extern void cleanup_memory(void);
-
-// Funções do barramento de imagem/comando (bits 9:0)
-extern void escrever_bus_0_9(uint16_t valor);
-
-// --- NOVOS PROTÓTIPOS ADICIONADOS ---
-extern void set_zoom_4x(void);
-extern void set_zoom_8x(void);
-
-// Funções do barramento de LEDs (bits 17:10)
-extern void funcao_enviar_1(void);
-extern void funcao_enviar_2(void);
-extern void funcao_enviar_4(void);
-extern void funcao_enviar_8(void);
-extern void funcao_apagar_tudo(void);
-extern void carregar_imagem(void);
-
+#include "api.h"
 // --- Constantes e Estruturas (sem alterações) ---
+
 #define PIXEL_WRITE_ENABLE (1 << 9)
 
 typedef struct {
