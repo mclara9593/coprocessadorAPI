@@ -1,20 +1,11 @@
-/*
- * ==================================================================
- * main_unificado.c
- * Lógica principal em C com menu para controle da FPGA.
- *
- * VERSÃO ATUALIZADA: Adicionadas opções de controle de zoom.
- * ==================================================================
- */
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
 #include <unistd.h> // Para usleep
 #include "api.h"
-// --- Constantes e Estruturas (sem alterações) ---
 
-#define PIXEL_WRITE_ENABLE (1 << 9)
+#define PIXEL_WRITE_ENABLE (1 << 9) // Máscara para habilitar escrita no barramento
 
 typedef struct {
     uint8_t blue;
@@ -23,6 +14,7 @@ typedef struct {
     uint8_t reserved;
 } ColorPaletteEntry;
 
+// Funções auxiliares para leitura de dados do BMP
 static uint32_t read_int(const unsigned char* buffer, int offset) {
     return buffer[offset] | (buffer[offset+1] << 8) | (buffer[offset+2] << 16) | (buffer[offset+3] << 24);
 }
@@ -30,9 +22,7 @@ static uint16_t read_short(const unsigned char* buffer, int offset) {
     return buffer[offset] | (buffer[offset+1] << 8);
 }
 
-
-// --- Funções de Lógica da Aplicação (sem alterações, exceto pelo menu) ---
-
+// Função para lidar com a leitura do BMP e envio dos pixels para a FPGA
 void handle_image_mode() {
     char filename[256];
     FILE *image_file = NULL;
@@ -45,11 +35,13 @@ void handle_image_mode() {
     ColorPaletteEntry color_palette[256];
     int y, x;
 
+    // Pega o nome do arquivo BMP do usuário
     printf("\n--- MODO DE PROCESSAMENTO DE IMAGEM ---\n");
     printf("Digite o nome do arquivo .bmp: ");
     if (!fgets(filename, sizeof(filename), stdin)) return;
     filename[strcspn(filename, "\n")] = 0;
 
+    // Abre o arquivo BMP em modo binário
     image_file = fopen(filename, "rb");
     if (image_file == NULL) {
         perror("Erro ao abrir o arquivo de imagem");
@@ -57,6 +49,7 @@ void handle_image_mode() {
     }
     printf("Arquivo '%s' aberto com sucesso.\n", filename);
     
+    // Leitura do cabeçalho BMP 
     if (fread(bmp_header, 1, 54, image_file) != 54) {
         fprintf(stderr, "Erro: Nao foi possivel ler o cabecalho do BMP.\n");
         fclose(image_file); return;
@@ -66,6 +59,7 @@ void handle_image_mode() {
         fclose(image_file); return;
     }
 
+    // Captura das informações contidas no header do BMP
     data_offset = read_int(bmp_header, 10);
     width = read_int(bmp_header, 18);
     height = read_int(bmp_header, 22);
@@ -79,10 +73,14 @@ void handle_image_mode() {
 
     printf("Info da Imagem: %u x %u, %u bpp.\n", width, height, bits_per_pixel);
     
+    // Posiciona o ponteiro no início dos dados dos pixels
     fseek(image_file, data_offset, SEEK_SET);
+
+    // Calcula o tamanho dos dados dos pixels e aloca memória
     row_padded_size = (width * bits_per_pixel / 8 + 3) & ~3;
     pixel_data_size = row_padded_size * height;
     
+    // Leitura real dos pixels
     pixel_buffer = (unsigned char*) malloc(pixel_data_size);
     if (!pixel_buffer) {
         fprintf(stderr, "Erro: Falha ao alocar memoria para a imagem.\n");
@@ -94,6 +92,7 @@ void handle_image_mode() {
         free(pixel_buffer); fclose(image_file); return;
     }
     
+    // Leitura da paleta de cores
     if (bits_per_pixel == 8) {
         fseek(image_file, 54, SEEK_SET);
         if (fread(color_palette, sizeof(ColorPaletteEntry), 256, image_file) != 256) {
@@ -105,6 +104,7 @@ void handle_image_mode() {
     fclose(image_file);
     printf("Enviando pixels para a FPGA na ordem correta...\n");
 
+    // Envio dos pixels para a FPGA de cima para baixo
     for (y = height - 1; y >= 0; y--) {
         for (x = 0; x < width; x++) {
             uint8_t gray_pixel = 0;
@@ -120,7 +120,7 @@ void handle_image_mode() {
                 gray_pixel = (uint8_t)((red * 77 + green * 151 + blue * 28) >> 8);
             }
             uint16_t data_to_send = PIXEL_WRITE_ENABLE | gray_pixel;
-            escrever_bus_0_9(data_to_send);
+            escrever_bus_0_9(data_to_send); // Pixels enviados aqui
             usleep(1);
             escrever_bus_0_9(0);
             pixel_count++;
@@ -132,6 +132,7 @@ void handle_image_mode() {
     printf("Total de pixels enviados: %ld (Esperado: %u)\n", pixel_count, width * height);
 }
 
+// Função para lidar com o menu de seleção de algoritmo
 void handle_algo_select() {
     printf("\n--- MODO INTERATIVO DE CONTROLE DE LEDS ---\n");
     funcao_apagar_tudo();
@@ -152,14 +153,11 @@ void handle_algo_select() {
             printf("C: Chamando funcao_enviar_1()...\n"); 
             funcao_enviar_1(); 
         }
-        // --- INÍCIO DA MODIFICAÇÃO REQUISITADA ---
         else if (strncmp(buffer, "2", 1) == 0) {
             
-            // 1. Seleciona o algoritmo na FPGA (conforme lógica original)
             printf("C: Chamando funcao_enviar_2() (Algoritmo: Vizinho Mais Próximo)...\n"); 
             funcao_enviar_2(); 
             
-            // 2. Pergunta o fator de zoom (nova lógica)
             printf("\n  -> Escolha o FATOR de zoom para 'Vizinho Mais Próximo':\n");
             printf("     (4) - Aplicar Zoom 4x\n");
             printf("     (8) - Aplicar Zoom 8x\n");
@@ -181,7 +179,6 @@ void handle_algo_select() {
                 printf("Opcao de zoom invalida ou 'voltar' selecionado. Retornando ao menu de algoritmos...\n");
             }
         }
-        // --- FIM DA MODIFICAÇÃO REQUISITADA ---
         else if (strncmp(buffer, "4", 1) == 0) { 
             printf("C: Chamando funcao_enviar_4()...\n"); 
             funcao_enviar_4(); 
@@ -204,21 +201,16 @@ void handle_algo_select() {
     }
 }
 
-/**
- * @brief Mostra o menu principal. (Atualizado com novas opções)
- */
+// Função para exibir o menu principal atualizado
 void show_main_menu() {
-    // --- MENU ATUALIZADO ---
     printf("\n===== MENU DE CONTROLE HPS-FPGA =====\n");
     printf("1. Enviar Imagem BMP para a FPGA\n");
     printf("2. Entrar no modo de controle de Algoritmos\n");
-    printf("3. Carregar imagem de teste (via Assembly)\n");
-    printf("4. Sair\n");
+    printf("3. Sair\n");
     printf("=======================================\n");
     printf("Escolha uma opcao: ");
 }
 
-// --- Função Main ---
 int main() {
     int choice = 0;
     char input_buffer[10];
@@ -231,8 +223,7 @@ int main() {
     }
     printf("Hardware (ponte HPS-FPGA) mapeado com sucesso.\n");
     
-    // --- LOOP DO MENU ATUALIZADO ---
-    while (choice != 6) { // A opção de sair agora é 6
+    while (choice != 3) { 
         show_main_menu();
         if (!fgets(input_buffer, sizeof(input_buffer), stdin)) break;
         choice = atoi(input_buffer);
@@ -244,13 +235,8 @@ int main() {
             case 2:
                 handle_algo_select();
                 break;
-            case 3:
-                printf("C: Chamando carregar_imagem() do Assembly...\n");
-                carregar_imagem();
-                printf("Comando enviado.\n");
-                break;
 
-            case 4: // Opção de sair atualizada
+            case 3: 
                 printf("Saindo...\n");
                 break;
             default:

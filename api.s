@@ -2,17 +2,14 @@
 @ api_pio_unificado.s
 @ Biblioteca Assembly unificada para controlar dois barramentos
 @ de um mesmo periférico PIO na ponte HPS-FPGA.
-@
-@ VERSÃO CORRIGIDA: Usa LDR Rd, =valor para carregar constantes
-@ que não cabem na instrução MOV.
 @ ==================================================================
 .syntax unified
 .thumb
 .text
 
 @ ========== CONSTANTES GLOBAIS ==========
-.equ LW_BRIDGE_BASE,    0xFF200000
-.equ LW_BRIDGE_SPAN,    0x00020000
+.equ LW_BRIDGE_BASE,    0xFF200000    
+.equ LW_BRIDGE_SPAN,    0x00020000    
 .equ PIO_DATA_OFFSET,   0x00000000
 .equ PIO_BUS_0_9_MASK,  0x000003FF
 .equ PIO_BUS_10_17_MASK, 0x0003FC00
@@ -32,7 +29,7 @@ asm_pio_current_state: .word 0
 
 @ ==================================================================
 @ SEÇÃO DE INICIALIZAÇÃO E LIMPEZA DA MEMÓRIA
-@ (Inalterado)
+
 @ ==================================================================
 .global init_memory
 .type init_memory, %function
@@ -88,7 +85,7 @@ cleanup_memory:
 
 @ ==================================================================
 @ FUNÇÃO HELPER INTERNA PARA ESCRITA NO PIO
-@ (Inalterado)
+
 @ ==================================================================
 write_pio_masked:
     push {r2, r3, r4, lr}
@@ -126,7 +123,7 @@ escrever_bus_0_9:
 .type set_zoom_4x, %function
 set_zoom_4x:
     push {r4, lr}
-    ldr r0, =0x8400             @ CORREÇÃO: Usa LDR para carregar o valor
+    ldr r0, =0x8400            
     ldr r1, =PIO_BUS_10_17_MASK
     bl write_pio_masked
     pop {r4, lr}
@@ -140,7 +137,7 @@ set_zoom_4x:
 .type set_zoom_8x, %function
 set_zoom_8x:
     push {r4, lr}
-    ldr r0, =0x10400            @ CORREÇÃO: Usa LDR para carregar o valor
+    ldr r0, =0x10400           
     ldr r1, =PIO_BUS_10_17_MASK
     bl write_pio_masked
     pop {r4, lr}
@@ -149,7 +146,7 @@ set_zoom_8x:
 
 @ ==================================================================
 @ FUNÇÕES DE CONTROLE DO BARRAMENTO 2 (Bits 17:10)
-@ (Inalterado)
+
 @ ==================================================================
 .global funcao_enviar_1
 .type funcao_enviar_1, %function
